@@ -1,1 +1,12 @@
-.venv\Scripts\activate
+.venv\Scripts\activate (activar venv)
+
+pip install Flask Instalacion de Flask (Instalación de FLASK Framework)
+
+flask --app app run (Ejecutar aplicación)
+
+Ctrl + C => Cerrar aplicación
+
+cls => Limpiar terminal
+
+pip install psycopg2 ==> es una libreria que permite la conexiòn con SQL
+ 
