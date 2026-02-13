@@ -40,7 +40,7 @@ def login():
     error = None
     
     if request.method == "POST":
-        usuario = request.form.get("user", "").strip()
+        usuario = request.form.get("id_usuarios", "").strip()
         password = request.form.get("password", "").strip()
 
         if not usuario or not password:
@@ -61,8 +61,8 @@ def login():
                 if check_password_hash(password_guardada, password):
                     # Usuario existe con contraseña correcta
                     remember = True if request.form.get('remember') == 'on' else False
-                    session['usuario'] = usuario
-                    session['email'] = email_guardado
+                    session['id_usuarios'] = usuario
+                    session['user_email'] = email_guardado
                     # Si el usuario marcó 'recordarme', hacer la sesión permanente
                     session.permanent = remember
                     cursor.close()
@@ -94,10 +94,10 @@ def registro():
     mensaje = None
     
     if request.method == "POST":
-        usuario = request.form.get("user", "").strip()
+        usuario = request.form.get("user_name", "").strip()
         password = request.form.get("password", "").strip()
         password_confirm = request.form.get("password-confirm", "").strip()
-        email = request.form.get("email", "").strip()
+        email = request.form.get("user_email", "").strip()
 
         if not usuario or not password or not password_confirm or not email:
             error = "Todos los campos son requeridos"
@@ -138,8 +138,8 @@ def registro():
             conn.commit()
             
             # Guardar en sesión después de registrar
-            session['usuario'] = usuario
-            session['email'] = email
+            session['id_usuarios'] = usuario
+            session['user_email'] = email
             
             print(f"Nuevo usuario registrado: {usuario}")
             cursor.close()
@@ -165,7 +165,7 @@ def bienvenida():
         return redirect(url_for('login'))
     # Extraer mensaje de error temporal (si existe)
     error = session.pop('error', None)
-    return render_template("bienvenida.html", usuario=session['usuario'], email=session['email'], error=error)
+    return render_template("bienvenida.html", usuario=session['id_usuarios'], email=session['user_email'], error=error)
 
 @app.route("/volver")
 def volver():
@@ -214,7 +214,7 @@ def completar_datos():
 
         cursor.execute("""UPDATE users SET nombre_completo = %s, telefono = %s, 
                          ciudad = %s, descripcion = %s WHERE user_name = %s""",
-                       (nombre, telefono, ciudad, descripcion, session['usuario']))
+                       (nombre, telefono, ciudad, descripcion, session['id_usuarios']))
         conn.commit()
         cursor.close()
         conn.close()
