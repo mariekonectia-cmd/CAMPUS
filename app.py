@@ -31,6 +31,14 @@ def conectarCampus():
     return conexion
 
 
+def get_table_columns(conn, table_name):
+    cur = conn.cursor()
+    cur.execute("SELECT column_name FROM information_schema.columns WHERE table_name = %s", (table_name,))
+    cols = [r[0] for r in cur.fetchall()]
+    cur.close()
+    return cols
+
+
 @app.route("/")
 def hello_world():
     return render_template("base.html")
@@ -40,7 +48,7 @@ def login():
     error = None
     
     if request.method == "POST":
-        usuario = request.form.get("id_usuarios", "").strip()
+        usuario = (request.form.get("id_usuarios") or request.form.get("user") or "").strip()
         password = request.form.get("password", "").strip()
 
         if not usuario or not password:
@@ -94,10 +102,11 @@ def registro():
     mensaje = None
     
     if request.method == "POST":
-        usuario = request.form.get("user_name", "").strip()
+        # Soportar tanto los nombres antiguos como los nuevos en la plantilla
+        usuario = (request.form.get("user_name") or request.form.get("user") or "").strip()
         password = request.form.get("password", "").strip()
         password_confirm = request.form.get("password-confirm", "").strip()
-        email = request.form.get("user_email", "").strip()
+        email = (request.form.get("user_email") or request.form.get("email") or "").strip()
 
         if not usuario or not password or not password_confirm or not email:
             error = "Todos los campos son requeridos"
@@ -133,8 +142,36 @@ def registro():
 
             # Registrar nuevo usuario
             password_hasheada = generate_password_hash(password)
-            cursor.execute("INSERT INTO users (user_name, password, user_email) VALUES (%s, %s, %s)",
-                           (usuario, password_hasheada, email))
+
+            # Construir INSERT dinámico según columnas existentes
+            cols = get_table_columns(conn, 'users')
+            insert_fields = ['user_name', 'password', 'user_email']
+            insert_values = [usuario, password_hasheada, email]
+
+            # Si existe columna 'rol' (no nula), asignar un rol por defecto
+            if 'rol' in cols:
+                # Intentar obtener el tipo enum asociado a la columna y su primer valor
+                cursor.execute("SELECT udt_name FROM information_schema.columns WHERE table_name = %s AND column_name = %s", ('users', 'rol'))
+                udt_row = cursor.fetchone()
+                default_role = None
+                if udt_row and udt_row[0]:
+                    udt_name = udt_row[0]
+                    # Leer labels del enum desde pg_catalog
+                    cursor.execute("SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE pg_type.typname = %s ORDER BY enumsortorder", (udt_name,))
+                    enum_rows = cursor.fetchall()
+                    if enum_rows:
+                        default_role = enum_rows[0][0]
+
+                # Fallback: si no encontramos un enum válido, usar 'usuario' si parece tener sentido
+                if not default_role:
+                    default_role = 'usuario'
+
+                insert_fields.append('rol')
+                insert_values.append(default_role)
+
+            placeholders = ','.join(['%s'] * len(insert_values))
+            sql = f"INSERT INTO users ({', '.join(insert_fields)}) VALUES ({placeholders})"
+            cursor.execute(sql, tuple(insert_values))
             conn.commit()
             
             # Guardar en sesión después de registrar
@@ -161,16 +198,16 @@ def registro():
 
 @app.route("/bienvenida")
 def bienvenida():
-    if 'usuario' not in session:
+    if 'id_usuarios' not in session:
         return redirect(url_for('login'))
     # Extraer mensaje de error temporal (si existe)
     error = session.pop('error', None)
-    return render_template("bienvenida.html", usuario=session['id_usuarios'], email=session['user_email'], error=error)
+    return render_template("bienvenida.html", usuario=session['id_usuarios'], email=session.get('user_email'), error=error)
 
 @app.route("/volver")
 def volver():
     # Volver a inicio y limpiar sesión
-    if 'usuario' in session:
+    if 'id_usuarios' in session:
         session.clear()
     return redirect(url_for('hello_world'))
 
@@ -183,45 +220,61 @@ def logout():
 
 @app.route("/completar-datos", methods=["POST"])
 def completar_datos():
-    if 'usuario' not in session:
+    if 'id_usuarios' not in session:
         return redirect(url_for('login'))
-    
+
     nombre = request.form.get("nombre", "").strip()
     telefono = request.form.get("telefono", "").strip()
     ciudad = request.form.get("ciudad", "").strip()
     descripcion = request.form.get("descripcion", "").strip()
-    
+
     try:
         conn = conectarCampus()
         cursor = conn.cursor()
-        # Validar que el teléfono no esté registrado por otro usuario
-        if telefono:
-            cursor.execute("SELECT 1 FROM users WHERE telefono = %s AND user_name != %s", (telefono, session['usuario']))
+
+        cols = get_table_columns(conn, 'users')
+
+        # Validar que el teléfono no esté registrado por otro usuario (si la columna existe)
+        if 'telefono' in cols and telefono:
+            cursor.execute("SELECT 1 FROM users WHERE telefono = %s AND user_name != %s", (telefono, session['id_usuarios']))
             if cursor.fetchone():
                 cursor.close()
                 conn.close()
                 session['error'] = "El teléfono ya está registrado por otro usuario"
                 return redirect(url_for('bienvenida'))
 
-        # Validar que el nombre completo no esté ya en uso por otro usuario
-        if nombre:
-            cursor.execute("SELECT 1 FROM users WHERE nombre_completo = %s AND user_name != %s", (nombre, session['usuario']))
+        # Validar que el nombre completo no esté ya en uso por otro usuario (si la columna existe)
+        if 'nombre_completo' in cols and nombre:
+            cursor.execute("SELECT 1 FROM users WHERE nombre_completo = %s AND user_name != %s", (nombre, session['id_usuarios']))
             if cursor.fetchone():
                 cursor.close()
                 conn.close()
                 session['error'] = "El nombre completo ya está registrado por otro usuario"
                 return redirect(url_for('bienvenida'))
 
-        cursor.execute("""UPDATE users SET nombre_completo = %s, telefono = %s, 
-                         ciudad = %s, descripcion = %s WHERE user_name = %s""",
-                       (nombre, telefono, ciudad, descripcion, session['id_usuarios']))
-        conn.commit()
+        # Construir UPDATE dinámico según columnas existentes
+        field_map = {'nombre': 'nombre_completo', 'telefono': 'telefono', 'ciudad': 'ciudad', 'descripcion': 'descripcion'}
+        form_values = {'nombre': nombre, 'telefono': telefono, 'ciudad': ciudad, 'descripcion': descripcion}
+        updates = []
+        values = []
+        for form_field, col in field_map.items():
+            val = form_values.get(form_field)
+            if col in cols and val:
+                updates.append(f"{col} = %s")
+                values.append(val)
+
+        if updates:
+            values.append(session['id_usuarios'])
+            sql_query = "UPDATE users SET " + ", ".join(updates) + " WHERE user_name = %s"
+            cursor.execute(sql_query, tuple(values))
+            conn.commit()
+
         cursor.close()
         conn.close()
-        
+
         session.clear()
         return redirect(url_for('hello_world'))
-    
+
     except Exception as e:
         print(f"Error: {str(e)}")
         return redirect(url_for('bienvenida'))
