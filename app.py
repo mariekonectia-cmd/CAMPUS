@@ -5,11 +5,18 @@ from dotenv import load_dotenv
 import os
 from datetime import timedelta
 from functools import wraps
+import requests
+import random
 
 
 #Cargar variables de entorno desde archivo .env
 load_dotenv()
 
+# Intentar importar pokebase si está instalado
+try:
+    import pokebase as pb
+except Exception:
+    pb = None
 app = Flask(__name__)
 # Cargar clave secreta desde .env para seguridad en producción
 app.secret_key = os.getenv("SECRET_KEY", "tu_clave_secreta_aqui")
@@ -41,7 +48,33 @@ def get_table_columns(conn, table_name):
 
 @app.route("/")
 def hello_world():
-    return render_template("base.html")
+    pokemons = []
+    try:
+        # Obtener la lista completa y elegir 20 al azar
+        resp = requests.get('https://pokeapi.co/api/v2/pokemon?limit=100000', timeout=8)
+        resp.raise_for_status()
+        data = resp.json()
+        results = data.get('results', []) or []
+        count = min(20, len(results))
+        sampled = random.sample(results, count) if results else []
+        for item in sampled:
+            name = item.get('name', '').title()
+            url = item.get('url', '')
+            pid = None
+            try:
+                pid = int(url.rstrip('/').split('/')[-1])
+            except Exception:
+                pid = None
+
+            sprite = None
+            if pid:
+                sprite = f"https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/{pid}.png"
+
+            pokemons.append({'id': pid, 'name': name, 'sprite': sprite})
+    except Exception as e:
+        print(f"Error fetching pokemon list: {e}")
+
+    return render_template("base.html", pokemons=pokemons)
 
 @app.route("/login", methods=["GET", "POST"])
 def login():

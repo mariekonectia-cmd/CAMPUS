@@ -21,3 +21,5 @@ gunicorn
 
 # #Opcionales para despliegue descomentarlas si las usas)
 # #waitress>=2.1.0  #windows deployed
+requests
+pokebase

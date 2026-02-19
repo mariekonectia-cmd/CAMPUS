@@ -57,6 +57,28 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 16px;
+            margin-top: 24px;
+        }
+
+        .card {
+            background: #f7f7fb;
+            border-radius: 8px;
+            padding: 12px;
+            text-align: center;
+            box-shadow: 0 6px 12px rgba(0,0,0,0.06);
+        }
+
+        .card img {
+            width: 80px;
+            height: 80px;
+            object-fit: contain;
+            margin-bottom: 8px;
+        }
+        .card h3 { font-size: 14px; color: #444; margin: 0; }
     </style>
 </head>
 <body>
@@ -65,6 +87,22 @@
         <p>Bienvenido a nuestra plataforma educativa</p>
         
         <a href="/login">Ir a Registro</a>
+
+        {% if pokemons %}
+        <div class="grid">
+            {% for p in pokemons %}
+            <div class="card">
+                {% if p.sprite %}
+                <img src="{{ p.sprite }}" alt="{{ p.name }}">
+                {% else %}
+                <div style="height:80px;display:flex;align-items:center;justify-content:center;color:#999">No image</div>
+                {% endif %}
+                <h3>{{ p.name }}</h3>
+            </div>
+            {% endfor %}
+        </div>
+        <iframe src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d5240.710072637746!2d-3.768871724353068!3d43.469227714311046!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0xd494b1833ea3319%3A0xb3b371589feef001!2sPalacio%20de%20La%20Magdalena!5e1!3m2!1ses!2ses!4v1771495298801!5m2!1ses!2ses" width="450" height="450" style="border:20;" allowfullscreen="" loading="lazy" referrerpolicy="no-referrer-when-downgrade"></iframe>
+        {% endif %}
     </div>
 </body>
 </html>
