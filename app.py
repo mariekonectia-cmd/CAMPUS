@@ -312,5 +312,38 @@ def completar_datos():
         print(f"Error: {str(e)}")
         return redirect(url_for('bienvenida'))
 
+
+@app.route('/reset-password', methods=['GET', 'POST'])
+def reset_password():
+    message = None
+    if request.method == 'POST':
+        email = (request.form.get('email') or '').strip()
+        if not email:
+            message = 'Por favor, ingrese su email.'
+        else:
+            try:
+                conn = conectarCampus()
+                cursor = conn.cursor()
+                cursor.execute("SELECT user_name FROM users WHERE user_email = %s", (email,))
+                row = cursor.fetchone()
+                cursor.close()
+                conn.close()
+                # En una app real enviaríamos un correo aquí. Para esta demo mostramos mensaje genérico.
+                message = 'Si el email existe en nuestro sistema, se ha enviado un enlace de restablecimiento.'
+            except Exception as e:
+                message = f"Error al procesar la solicitud: {str(e)}"
+
+    return render_template('reset_password.html', message=message)
+
+
+@app.route('/register')
+def register():
+    return render_template('register.html')
+
+
+@app.route('/help')
+def help():
+    return render_template('help.html')
+
 if __name__ == "__main__":
     app.run(debug=True)

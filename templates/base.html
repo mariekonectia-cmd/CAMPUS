@@ -57,6 +57,32 @@
             transform: translateY(-2px);
             box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
         }
+
+        .actions {
+            margin-top: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .link-btn {
+            display: inline-block;
+            padding: 10px 28px;
+            background: #ffffff;
+            color: #667eea;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 14px;
+            border: 1px solid rgba(102,126,234,0.15);
+            transition: all 0.2s ease;
+        }
+
+        .link-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(102,126,234,0.08);
+        }
         .grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
@@ -86,7 +112,11 @@
         <h1>Campus Konectia</h1>
         <p>Bienvenido a nuestra plataforma educativa</p>
         
-        <a href="/login">Ir a Registro</a>
+        <div class="actions">
+            <a class="" href="/login">Ingresar</a>
+            <a class="link-btn" href="/register">¿No cuenta con usuario? Haz clic aquí</a>
+            <a class="link-btn" href="/help">¿Necesitas ayuda? Haz clic aquí</a>
+        </div>
 
         {% if pokemons %}
         <div class="grid">
