@@ -140,7 +140,7 @@ def registro():
         password = request.form.get("password", "").strip()
         password_confirm = request.form.get("password-confirm", "").strip()
         email = (request.form.get("user_email") or request.form.get("email") or "").strip()
-
+        
         if not usuario or not password or not password_confirm or not email:
             error = "Todos los campos son requeridos"
             return render_template("registro.html", error=error)
@@ -359,10 +359,20 @@ def admin():
     try:
         conn = conectarCampus()
         cur = conn.cursor()
-        # Intentar leer usuarios desde la tabla 'users'
-        cur.execute("SELECT id, user_name, user_email, rol FROM users ORDER BY id")
+        # Intentar leer usuarios con rol 'alumno' desde la tabla 'users'
+        cur.execute("SELECT id, user_name, user_email, rol, creado_en, actualizado_en FROM users WHERE LOWER(rol) = LOWER(%s) ORDER BY id", ('alumno',))
         rows = cur.fetchall()
-        users = [{'id': r[0], 'name': r[1], 'email': r[2], 'role': r[3]} for r in rows]
+        users = [
+            {
+                'id': r[0],
+                'name': r[1],
+                'email': r[2],
+                'role': r[3],
+                'creado_en': r[4],
+                'actualizado_en': r[5]
+            }
+            for r in rows
+        ]
 
         stats = {}
         stats['users'] = len(users)
@@ -438,20 +448,10 @@ def admin_login():
 
         except Exception as e:
             error = f"Error al procesar login: {str(e)}"
-            return render_template('admin_login.html', error=error)
+            return render_template("admin_login.html")
 
-    return render_template('admin_login.html', error=error)
+        return render_template("admin_login.html", error=error)
 
 if __name__ == "__main__":
     app.run(debug=True)
 
-#@app.route("/logout", methods=["GET"])
-#def logout():
-#    """cerrar sesion"""
-#    session.clear()
-#return redirect(url_for("hello_world"))
-
-#@app.route("/app-admin", methods=["GET", "POST"])
-#def perfil_admin():
-#return render_template("admin.html")
-     
