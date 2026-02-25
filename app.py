@@ -345,5 +345,113 @@ def register():
 def help():
     return render_template('help.html')
 
+
+@app.route('/admin')
+def admin():
+    # Requerir inicio de sesión
+    if 'id_usuarios' not in session:
+        return redirect(url_for('login'))
+
+    # Comprobar rol de administrador en sesión
+    if session.get('role') != 'admin' and not session.get('is_admin'):
+        return redirect(url_for('admin_login'))
+
+    try:
+        conn = conectarCampus()
+        cur = conn.cursor()
+        # Intentar leer usuarios desde la tabla 'users'
+        cur.execute("SELECT id, user_name, user_email, rol FROM users ORDER BY id")
+        rows = cur.fetchall()
+        users = [{'id': r[0], 'name': r[1], 'email': r[2], 'role': r[3]} for r in rows]
+
+        stats = {}
+        stats['users'] = len(users)
+
+        # Contar publicaciones si existe la tabla 'posts'
+        try:
+            cur.execute("SELECT COUNT(*) FROM posts")
+            stats['posts'] = cur.fetchone()[0]
+        except Exception:
+            stats['posts'] = None
+
+        # Contar usuarios activos si existe la columna 'active'
+        try:
+            cur.execute("SELECT COUNT(*) FROM users WHERE active = TRUE")
+            stats['active'] = cur.fetchone()[0]
+        except Exception:
+            stats['active'] = None
+
+        cur.close()
+        conn.close()
+
+    except Exception:
+        # Fallback a datos de ejemplo para desarrollo
+        users = [
+            {'id': 1, 'name': 'Admin', 'email': 'admin@example.com', 'role': 'admin'},
+            {'id': 2, 'name': 'Usuario', 'email': 'user@example.com', 'role': 'usuario'},
+        ]
+        stats = {'users': len(users), 'posts': 5, 'active': 2}
+
+    return render_template('admin.html', users=users, stats=stats)
+
+
+@app.route('/admin-login', methods=['GET', 'POST'])
+def admin_login():
+    error = None
+    if request.method == 'POST':
+        usuario = (request.form.get('user') or "").strip()
+        password = (request.form.get('password') or "").strip()
+
+        if not usuario or not password:
+            error = 'Usuario y contraseña requeridos'
+            return render_template('admin_login.html', error=error)
+
+        try:
+            conn = conectarCampus()
+            cur = conn.cursor()
+            # Buscar usuario y rol
+            cur.execute("SELECT password, rol FROM users WHERE LOWER(user_name) = LOWER(%s)", (usuario,))
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+
+            if not row:
+                error = 'Usuario no encontrado'
+                return render_template('admin_login.html', error=error)
+
+            password_guardada, rol = row
+            # Aceptar sólo si el rol es 'admin' (o similar)
+            if rol is None or str(rol).lower() != 'admin':
+                error = 'Acceso denegado: no es administrador'
+                return render_template('admin_login.html', error=error)
+
+            if check_password_hash(password_guardada, password):
+                # Login admin correcto: crear sesión con rol admin
+                session['id_usuarios'] = usuario
+                session['user_email'] = session.get('user_email')
+                session['role'] = 'admin'
+                session['is_admin'] = True
+                return redirect(url_for('admin'))
+            else:
+                error = 'Contraseña incorrecta'
+                return render_template('admin_login.html', error=error)
+
+        except Exception as e:
+            error = f"Error al procesar login: {str(e)}"
+            return render_template('admin_login.html', error=error)
+
+    return render_template('admin_login.html', error=error)
+
 if __name__ == "__main__":
     app.run(debug=True)
+
+#@app.route("/logout", methods=["GET"])
+#def logout():
+#    """cerrar sesion"""
+#    session.clear()
+#return redirect(url_for("hello_world"))
+
+#@app.route("/app-admin", methods=["GET", "POST"])
+#def perfil_admin():
+#return render_template("admin.html")
+     
