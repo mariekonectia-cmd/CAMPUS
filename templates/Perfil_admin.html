@@ -2,19 +2,47 @@
 
 {% block content %}
 
-    <p>Admin {{ usuario }} ha iniciado sesión correctamente.<br>
-    
-    <ul>
-        <li><button type="button" onclick="location.href='{{ url_for('mod_usuarios') }}'">Modificar Usuarios</button></li>
-        <li><button>Modificar Asignaturas</button></li>
-        <li><button>Modificar Horarios</button></li>
-        <li><button></button></li>
-        <li><button></button></li>
-        <li><button></button></li>
+    <h2>Bienvenido, administrador {{ usuario }}</h2>
+    <p>Correo: {{ email }}</p>
+    <p>Desde aquí puedes gestionar usuarios, asignaturas y horarios de la plataforma.</p>
 
+    <ul>
+        <li><button type="button" onclick="location.href='{{ url_for('mod_usuarios') }}'">Modificar usuarios</button></li>
+        <li><button type="button" onclick="alert('Función temporal: aún no implementada')">Modificar asignaturas</button></li>
+        <li><button type="button" onclick="alert('Función temporal: aún no implementada')">Modificar horarios</button></li>
     </ul>
-    
-    
+
+    {% if users %}
+    <hr>
+    <h3>Lista de alumnos</h3>
+    <div class="table-responsive">
+        <table class="table table-striped" style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Email</th>
+                    <th>Rol</th>
+                    <th>Creado</th>
+                    <th>Actualizado</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in users %}
+                <tr>
+                    <td>{{ u.id }}</td>
+                    <td>{{ u.name }}</td>
+                    <td>{{ u.email }}</td>
+                    <td>{{ u.role }}</td>
+                    <td>{{ u.creado_en }}</td>
+                    <td>{{ u.actualizado_en }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
     <a href="{{ url_for('logout') }}" class="btn btn-danger">Cerrar sesión</a>
 
 {% endblock%}

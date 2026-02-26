@@ -109,13 +109,18 @@
 </head>
 <body>
     <div class="container">
+        {# solo mostrar la tarjeta de bienvenida en la página principal #}
+        {% if request.endpoint == 'hello_world' %}
         <h1>Campus Konectia</h1>
         <p>Bienvenido a nuestra plataforma educativa</p>
-        
+        {% endif %}
+
         <div class="actions">
             <a class="" href="/login">Ingresar</a>
-            {% if session.get('role') == 'admin' or session.get('is_admin') %}
+            <!-- añadir siempre acceso al login de administración -->
             <a class="link-btn" href="{{ url_for('admin_login') }}">Administración</a>
+            {% if session.get('role') == 'admin' or session.get('is_admin') %}
+            <a class="link-btn" href="{{ url_for('perfil_admin') }}">Panel de admin</a>
             {% endif %}
             <a class="link-btn" href="/register">¿No cuenta con usuario? Haz clic aquí</a>
             <a class="link-btn" href="/help">¿Necesitas ayuda? Haz clic aquí</a>

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template, request, redirect, url_for, session, jsonify
 import psycopg2
 from werkzeug.security import generate_password_hash, check_password_hash
 from dotenv import load_dotenv
@@ -181,24 +181,20 @@ def registro():
             insert_fields = ['user_name', 'password', 'user_email']
             insert_values = [usuario, password_hasheada, email]
 
+            # agregar timestamps si existen en la tabla
+            from datetime import datetime, timezone
+            now_ts = datetime.now(timezone.utc)
+            if 'creado_en' in cols:
+                insert_fields.append('creado_en')
+                insert_values.append(now_ts)
+            if 'actualizado_en' in cols:
+                insert_fields.append('actualizado_en')
+                insert_values.append(now_ts)
+
             # Si existe columna 'rol' (no nula), asignar un rol por defecto
             if 'rol' in cols:
-                # Intentar obtener el tipo enum asociado a la columna y su primer valor
-                cursor.execute("SELECT udt_name FROM information_schema.columns WHERE table_name = %s AND column_name = %s", ('users', 'rol'))
-                udt_row = cursor.fetchone()
-                default_role = None
-                if udt_row and udt_row[0]:
-                    udt_name = udt_row[0]
-                    # Leer labels del enum desde pg_catalog
-                    cursor.execute("SELECT enumlabel FROM pg_enum JOIN pg_type ON pg_enum.enumtypid = pg_type.oid WHERE pg_type.typname = %s ORDER BY enumsortorder", (udt_name,))
-                    enum_rows = cursor.fetchall()
-                    if enum_rows:
-                        default_role = enum_rows[0][0]
-
-                # Fallback: si no encontramos un enum válido, usar 'usuario' si parece tener sentido
-                if not default_role:
-                    default_role = 'usuario'
-
+                # siempre asignar 'alumno' por defecto en el registro de nuevos usuarios
+                default_role = 'alumno'
                 insert_fields.append('rol')
                 insert_values.append(default_role)
 
@@ -419,39 +415,161 @@ def admin_login():
         try:
             conn = conectarCampus()
             cur = conn.cursor()
-            # Buscar usuario y rol
-            cur.execute("SELECT password, rol FROM users WHERE LOWER(user_name) = LOWER(%s)", (usuario,))
+            # Seleccionar sólo si el usuario tiene rol admin
+            cur.execute(
+                "SELECT password, user_email FROM users \
+                 WHERE LOWER(user_name) = LOWER(%s) \
+                 AND LOWER(rol) = 'admin'",
+                (usuario,)
+            )
             row = cur.fetchone()
             cur.close()
             conn.close()
 
             if not row:
-                error = 'Usuario no encontrado'
+                error = 'Usuario o contraseña incorrectos o no es administrador'
                 return render_template('admin_login.html', error=error)
 
-            password_guardada, rol = row
-            # Aceptar sólo si el rol es 'admin' (o similar)
-            if rol is None or str(rol).lower() != 'admin':
-                error = 'Acceso denegado: no es administrador'
-                return render_template('admin_login.html', error=error)
-
+            password_guardada = row[0]
+            email_db = row[1] if len(row) > 1 else None
             if check_password_hash(password_guardada, password):
-                # Login admin correcto: crear sesión con rol admin
+                # Normalizar claves de sesión para compatibilidad
                 session['id_usuarios'] = usuario
-                session['user_email'] = session.get('user_email')
+                session['usuario'] = usuario
+                session['user_email'] = email_db
+                session['email'] = email_db
                 session['role'] = 'admin'
                 session['is_admin'] = True
-                return redirect(url_for('admin'))
+                # Redirect to perfil page
+                return redirect(url_for('perfil_admin'))
             else:
-                error = 'Contraseña incorrecta'
+                error = 'Usuario o contraseña incorrectos'
                 return render_template('admin_login.html', error=error)
 
         except Exception as e:
             error = f"Error al procesar login: {str(e)}"
-            return render_template("admin_login.html")
+            return render_template("admin_login.html", error=error)
 
-        return render_template("admin_login.html", error=error)
+    return render_template("admin_login.html", error=error)
+
+
+@app.route('/app-admin', methods=['GET', 'POST'])
+def app_admin():
+    """Alias sencillo que redirige al login de administrador"""
+    # Si se hace POST, delegamos en la función original para no duplicar código
+    if request.method == 'POST':
+        return admin_login()
+    # GET sólo redirige al formulario de autenticación
+    return redirect(url_for('admin_login'))
+
+
+@app.route('/perfil_admin')
+def perfil_admin():
+    """Página de perfil del administrador protegida"""
+    if session.get('role') != 'admin':
+        return redirect(url_for('admin_login'))
+
+    usuario = session.get("usuario")
+    email = session.get("email")
+    users = []
+    try:
+        conn = conectarCampus()
+        cur = conn.cursor()
+        cur.execute("SELECT id, user_name, user_email, rol, creado_en, actualizado_en FROM users WHERE LOWER(rol) = LOWER(%s) ORDER BY id", ('alumno',))
+        resultados = cur.fetchall()
+        for r in resultados:
+            users.append({
+                'id': r[0],
+                'name': r[1],
+                'email': r[2],
+                'role': r[3],
+                'creado_en': r[4],
+                'actualizado_en': r[5]
+            })
+        cur.close()
+        conn.close()
+    except Exception:
+        # si falla, dejamos users vacío
+        users = []
+
+    return render_template("Perfil_admin.html", usuario=usuario, email=email, users=users)
+
 
 if __name__ == "__main__":
     app.run(debug=True)
+
+
+@app.route('/debug-session')
+def debug_session():
+    """Ruta de depuración: muestra el contenido de `session` en JSON.
+    Solo disponible cuando `app.debug` es True.
+    """
+    if not app.debug:
+        return ("Debug endpoint disabled", 403)
+
+    # Serializar valores de sesión de forma segura
+    safe = {}
+    for k, v in session.items():
+        try:
+            # intentar añadir tal cual si es serializable
+            jsonify({k: v})
+            safe[k] = v
+        except Exception:
+            safe[k] = str(v)
+
+    return jsonify(dict(safe))
+
+
+@app.route('/create-admin')
+def create_admin():
+    """Ruta temporal (solo en debug): crea un usuario admin de prueba.
+    Usuario: admin | Contraseña: admin123
+    """
+    if not app.debug:
+        return ("Debug endpoint disabled", 403)
+
+    admin_user = "admin"
+    admin_pass = "admin123"
+    admin_email = "admin@campus.local"
+
+    try:
+        conn = conectarCampus()
+        cur = conn.cursor()
+
+        # Verificar si ya existe
+        cur.execute("SELECT 1 FROM users WHERE LOWER(user_name) = LOWER(%s)", (admin_user,))
+        if cur.fetchone():
+            # Actualizar si existe
+            hashed = generate_password_hash(admin_pass)
+            cur.execute(
+                "UPDATE users SET password = %s, user_email = %s, rol = %s, actualizado_en = now() WHERE LOWER(user_name) = LOWER(%s)",
+                (hashed, admin_email, 'admin', admin_user)
+            )
+            conn.commit()
+            result = f"✓ Admin actualizado: {admin_user} | contraseña: {admin_pass}"
+        else:
+            # Insertar nuevo
+            hashed = generate_password_hash(admin_pass)
+            cur.execute(
+                "INSERT INTO users (user_name, password, user_email, creado_en, actualizado_en, rol) VALUES (%s, %s, %s, now(), now(), %s)",
+                (admin_user, hashed, admin_email, 'admin')
+            )
+            conn.commit()
+            result = f"✓ Admin creado: {admin_user} | contraseña: {admin_pass}"
+
+        cur.close()
+        conn.close()
+
+        return f"""
+        <html>
+        <body style="font-family: monospace; padding:20px; background:#f0f0f0;">
+            <h3>{result}</h3>
+            <p>Ahora puedes iniciar sesión en: <a href="/admin-login">/admin-login</a></p>
+            <p>Usuario: <strong>{admin_user}</strong></p>
+            <p>Contraseña: <strong>{admin_pass}</strong></p>
+        </body>
+        </html>
+        """
+    except Exception as e:
+        return f"<html><body><h3>Error:</h3><pre>{str(e)}</pre></body></html>"
 
