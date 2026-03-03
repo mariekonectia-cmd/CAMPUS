@@ -2,178 +2,66 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bienvenida - Campus</title>
+    <title>Bienvenida</title>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Arial', sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        
-        .container {
-            background: white;
-            padding: 40px;
-            border-radius: 10px;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-            max-width: 500px;
-            width: 90%;
-        }
-        
-        h1 {
-            color: #333;
-            margin-bottom: 10px;
-            text-align: center;
-        }
-        
-        .welcome-message {
-            color: #667eea;
-            font-size: 18px;
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .form-group {
-            margin-bottom: 20px;
-        }
-        
-        label {
-            display: block;
-            margin-bottom: 8px;
-            color: #333;
-            font-weight: bold;
-        }
-        
-        input[type="text"],
-        input[type="email"],
-        input[type="tel"],
-        textarea {
-            width: 100%;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 14px;
-            font-family: 'Arial', sans-serif;
-        }
-        
-        input[type="text"]:focus,
-        input[type="email"]:focus,
-        input[type="tel"]:focus,
-        textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 5px rgba(102, 126, 234, 0.3);
-        }
-        
-        textarea {
-            resize: vertical;
-            min-height: 100px;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 10px;
-            margin-top: 30px;
-        }
-        
-        button {
-            flex: 1;
-            padding: 12px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: all 0.3s ease;
-        }
-        
-        .btn-guardar {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-        
-        .btn-guardar:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-        
-        .btn-volver {
-            background: #f0f0f0;
-            color: #333;
-        }
-        
-        .btn-volver:hover {
-            background: #e0e0e0;
-        }
-        
-        .info-usuario {
-            background: #f9f9f9;
-            padding: 15px;
-            border-radius: 5px;
-            margin-bottom: 20px;
-            border-left: 4px solid #667eea;
-        }
-        
-        .info-usuario p {
-            color: #555;
-            margin: 5px 0;
-        }
+        body { font-family: Arial, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; padding: 2rem; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 2rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+        .admin-header { background: linear-gradient(135deg, #10b981 0%, #059669 100%); color: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; text-align: center; }
+        .user-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 1.5rem; border-radius: 8px; margin-bottom: 2rem; text-align: center; }
+        .admin-buttons { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin: 2rem 0; }
+        .btn-admin { background: #10b981; color: white; padding: 1rem; border: none; border-radius: 8px; cursor: pointer; font-size: 1rem; font-weight: bold; }
+        .btn-admin:hover { background: #059669; }
+        .btn { background: #667eea; color: white; padding: 0.75rem 1.5rem; border: none; border-radius: 8px; cursor: pointer; text-decoration: none; display: inline-block; margin: 0.5rem; }
+        .btn-logout { background: #ef4444; }
+        .info-box { background: #f3f4f6; padding: 1rem; border-radius: 8px; margin: 1rem 0; }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>¡Bienvenido!</h1>
-        <div class="welcome-message">
-            Usuario: <strong>{{ usuario }}</strong>
-        </div>
         
-        <div class="info-usuario">
-            <p><strong>Email registrado:</strong> {{ email }}</p>
-        </div>
-        
-        {% if error %}
-        <div style="background-color: #f8d7da; color: #721c24; padding: 12px; border-radius: 5px; margin-bottom: 20px; border: 1px solid #f5c6cb;">
-            <strong>Error:</strong> {{ error }}
-        </div>
+        {% if is_admin %}
+            <!-- ✅ VISTA DE ADMINISTRADOR -->
+            <div class="admin-header">
+                <h1>👋 Bienvenido administrador</h1>
+                <p>{{ usuario }}</p>
+            </div>
+            <div class="info-box">
+                <strong>Email:</strong> {{ email }}<br>
+                <strong>Rol:</strong> <span style="color: #10b981; font-weight: bold;">Administrador</span>
+            </div>
+            <h3>Panel de Control</h3>
+            <p>Desde aquí puedes gestionar usuarios, asignaturas y horarios de la plataforma.</p>
+            <div class="admin-buttons">
+                <button class="btn-admin" onclick="location.href='{{ url_for('perfil_admin') }}'">👥 Modificar Usuarios</button>
+                <button class="btn-admin" onclick="alert('Función en desarrollo')">📚 Modificar Asignaturas</button>
+                <button class="btn-admin" onclick="alert('Función en desarrollo')">📅 Modificar Horarios</button>
+            </div>
+        {% else %}
+            <!-- ✅ VISTA DE USUARIO NORMAL -->
+            <div class="user-header">
+                <h1>¡Bienvenido!</h1>
+                <p>Usuario: {{ usuario }}</p>
+            </div>
+            <div class="info-box">
+                <strong>Email registrado:</strong> {{ email }}
+            </div>
+            <form action="{{ url_for('completar_datos') }}" method="POST">
+                <label><strong>Nombre Completo:</strong></label>
+                <input type="text" name="nombre" style="width: 100%; padding: 0.5rem; margin: 0.5rem 0;">
+                <label><strong>Teléfono:</strong></label>
+                <input type="text" name="telefono" style="width: 100%; padding: 0.5rem; margin: 0.5rem 0;">
+                <label><strong>Ciudad:</strong></label>
+                <input type="text" name="ciudad" style="width: 100%; padding: 0.5rem; margin: 0.5rem 0;">
+                <label><strong>Descripción:</strong></label>
+                <textarea name="descripcion" rows="4" style="width: 100%; padding: 0.5rem; margin: 0.5rem 0;"></textarea>
+                <button type="submit" class="btn">Guardar Datos</button>
+                <a href="{{ url_for('volver') }}" class="btn btn-logout">Volver</a>
+            </form>
         {% endif %}
-        
-        <form method="POST" action="/completar-datos">
-            <div class="form-group">
-                <label for="nombre">Nombre Completo:</label>
-                <input type="text" id="nombre" name="nombre" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="telefono">Teléfono:</label>
-                <input type="tel" id="telefono" name="telefono" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="ciudad">Ciudad:</label>
-                <input type="text" id="ciudad" name="ciudad" required>
-            </div>
-            
-            <div class="form-group">
-                <label for="descripcion">Descripción (opcional):</label>
-                <textarea id="descripcion" name="descripcion"></textarea>
-            </div>
-            
-            <div class="button-group">
-                <button type="submit" class="btn-guardar">Guardar Datos</button>
-                <a href="/volver" style="text-decoration: none;"><button type="button" class="btn-volver">Volver</button></a>
-            </div>
-        </form>
+
+        <div style="margin-top: 2rem; text-align: center;">
+            <a href="{{ url_for('logout') }}" class="btn btn-logout">🚪 Cerrar sesión</a>
+        </div>
     </div>
 </body>
 </html>
-<!-- 
-#fff -->

@@ -92,18 +92,28 @@ def login():
             conn = conectarCampus()
             cursor = conn.cursor()
             
-            # Verificar si el usuario existe (case-insensitive)
-            cursor.execute("SELECT password, user_email FROM users WHERE LOWER(user_name) = LOWER(%s)", (usuario,))
+            # ✅ CONSULTAR TAMBIÉN EL CAMPO 'rol'
+            cursor.execute("SELECT password, user_email, rol FROM users WHERE LOWER(user_name) = LOWER(%s)", (usuario,))
             fila = cursor.fetchone()
             
             if fila:
-                # El usuario ya existe
-                password_guardada, email_guardado = fila
+                # ✅ Ahora fila tiene 3 valores: password, email, rol
+                password_guardada, email_guardado, rol_db = fila
+                
                 if check_password_hash(password_guardada, password):
                     # Usuario existe con contraseña correcta
                     remember = True if request.form.get('remember') == 'on' else False
                     session['id_usuarios'] = usuario
                     session['user_email'] = email_guardado
+                    
+                    # ✅ DETECTAR Y GUARDAR EL ROL EN SESIÓN
+                    if rol_db and isinstance(rol_db, str) and rol_db.lower() == 'admin':
+                        session['role'] = 'admin'
+                        session['is_admin'] = True
+                    else:
+                        session['role'] = 'user'  # o 'alumno'
+                        session['is_admin'] = False
+
                     # Si el usuario marcó 'recordarme', hacer la sesión permanente
                     session.permanent = remember
                     cursor.close()
@@ -112,10 +122,9 @@ def login():
                 else:
                     cursor.close()
                     conn.close()
-                    error = "Usuario existe pero la contraseña es incorrecta"
+                    error = "Contraseña incorrecta"
                     return render_template("login.html", error=error)
             else:
-                # Usuario no existe
                 cursor.close()
                 conn.close()
                 error = "Usuario no existe"
@@ -229,9 +238,17 @@ def registro():
 def bienvenida():
     if 'id_usuarios' not in session:
         return redirect(url_for('login'))
-    # Extraer mensaje de error temporal (si existe)
+    
     error = session.pop('error', None)
-    return render_template("bienvenida.html", usuario=session['id_usuarios'], email=session.get('user_email'), error=error)
+    
+    # ✅ Determinar si es administrador
+    is_admin = session.get('role') == 'admin' or session.get('is_admin')
+    
+    return render_template("bienvenida.html", 
+                          usuario=session['id_usuarios'], 
+                          email=session.get('user_email'), 
+                          error=error,
+                          is_admin=is_admin)  # ✅ Pasar esta variable al template
 
 @app.route("/volver")
 def volver():
