@@ -92,30 +92,27 @@ def login():
             conn = conectarCampus()
             cursor = conn.cursor()
             
-            # ✅ CONSULTAR TAMBIÉN EL CAMPO 'rol'
-            cursor.execute("SELECT password, user_email, rol FROM users WHERE LOWER(user_name) = LOWER(%s)", (usuario,))
+            # ✅ CONSULTAR id_user, password, user_email, rol
+            cursor.execute("SELECT id_user, password, user_email, rol FROM users WHERE LOWER(user_name) = LOWER(%s)", (usuario,))
             fila = cursor.fetchone()
             
             if fila:
-                # ✅ Ahora fila tiene 3 valores: password, email, rol
-                password_guardada, email_guardado, rol_db = fila
+                id_user, password_guardada, email_guardado, rol_db = fila
                 
                 if check_password_hash(password_guardada, password):
-                    # Usuario existe con contraseña correcta
-                    remember = True if request.form.get('remember') == 'on' else False
                     session['id_usuarios'] = usuario
                     session['user_email'] = email_guardado
+                    session['id_user'] = id_user  # ✅ GUARDAR ID EN SESIÓN
                     
-                    # ✅ DETECTAR Y GUARDAR EL ROL EN SESIÓN
+                    # ✅ DETECTAR Y GUARDAR EL ROL
                     if rol_db and isinstance(rol_db, str) and rol_db.lower() == 'admin':
                         session['role'] = 'admin'
                         session['is_admin'] = True
                     else:
-                        session['role'] = 'user'  # o 'alumno'
+                        session['role'] = 'user'
                         session['is_admin'] = False
 
-                    # Si el usuario marcó 'recordarme', hacer la sesión permanente
-                    session.permanent = remember
+                    session.permanent = False
                     cursor.close()
                     conn.close()
                     return redirect(url_for('bienvenida'))
@@ -144,7 +141,6 @@ def registro():
     mensaje = None
     
     if request.method == "POST":
-        # Soportar tanto los nombres antiguos como los nuevos en la plantilla
         usuario = (request.form.get("user_name") or request.form.get("user") or "").strip()
         password = request.form.get("password", "").strip()
         password_confirm = request.form.get("password-confirm", "").strip()
@@ -166,7 +162,7 @@ def registro():
             conn = conectarCampus()
             cursor = conn.cursor()
             
-            # Verificar si el usuario ya existe (case-insensitive)
+            # Verificar si el usuario ya existe
             cursor.execute("SELECT 1 FROM users WHERE LOWER(user_name) = LOWER(%s)", (usuario,))
             if cursor.fetchone():
                 cursor.close()
@@ -190,8 +186,8 @@ def registro():
             insert_fields = ['user_name', 'password', 'user_email']
             insert_values = [usuario, password_hasheada, email]
 
-            # agregar timestamps si existen en la tabla
-            from datetime import datetime, timezone
+            # Agregar timestamps si existen en la tabla
+            from datetime import datetime, timezone, date, time
             now_ts = datetime.now(timezone.utc)
             if 'creado_en' in cols:
                 insert_fields.append('creado_en')
@@ -200,9 +196,8 @@ def registro():
                 insert_fields.append('actualizado_en')
                 insert_values.append(now_ts)
 
-            # Si existe columna 'rol' (no nula), asignar un rol por defecto
+            # Si existe columna 'rol', asignar rol por defecto
             if 'rol' in cols:
-                # siempre asignar 'alumno' por defecto en el registro de nuevos usuarios
                 default_role = 'alumno'
                 insert_fields.append('rol')
                 insert_values.append(default_role)
@@ -212,9 +207,41 @@ def registro():
             cursor.execute(sql, tuple(insert_values))
             conn.commit()
             
+            # ✅✅✅ AQUÍ VA EL CÓDIGO PARA CREAR EL EVENTO DE BIENVENIDA ✅✅✅
+            # Obtener el id_user del nuevo usuario registrado
+            cursor.execute("SELECT id_user FROM users WHERE user_name = %s", (usuario,))
+            result = cursor.fetchone()
+            nuevo_id_user = result[0] if result else None
+            
+            # Crear evento de bienvenida automático
+            if nuevo_id_user:
+                try:
+                    evento_fecha = date.today()  # Hoy
+                    evento_hora = time(9, 0)     # 9:00 AM
+                    
+                    cursor.execute("""
+                        INSERT INTO events (user_id, title, description, event_date, event_time)
+                        VALUES (%s, %s, %s, %s, %s)
+                    """, (
+                        nuevo_id_user,
+                        '🎉 ¡Bienvenido a la plataforma!',
+                        f'Hola {usuario}, gracias por registrarte. Este es tu primer evento en el calendario. ¡Explora todas las funcionalidades disponibles!',
+                        evento_fecha,
+                        evento_hora
+                    ))
+                    conn.commit()
+                    print(f"✅ Evento de bienvenida creado para: {usuario}")
+                except Exception as e:
+                    print(f"⚠️ No se pudo crear el evento de bienvenida: {e}")
+                    # No fallamos el registro si el evento falla
+            # ✅✅✅ FIN DEL CÓDIGO DEL EVENTO ✅✅✅
+            
             # Guardar en sesión después de registrar
             session['id_usuarios'] = usuario
             session['user_email'] = email
+            session['id_user'] = nuevo_id_user  # ✅ Guardar id_user en sesión
+            session['role'] = 'user'
+            session['is_admin'] = False
             
             print(f"Nuevo usuario registrado: {usuario}")
             cursor.close()
@@ -510,7 +537,161 @@ def perfil_admin():
         users = []
 
     return render_template("Perfil_admin.html", usuario=usuario, email=email, users=users)
+@app.route("/calendario")
+def calendario():
+    """Mostrar calendario con eventos del usuario"""
+    if 'id_usuarios' not in session:
+        return redirect(url_for('login'))
+    
+    usuario = session['id_usuarios']
+    user_id = session.get('id_user')
+    
+    try:
+        conn = conectarCampus()
+        cur = conn.cursor()
+        cur.execute("""
+            SELECT id, title, description, event_date, event_time, created_at 
+            FROM events 
+            WHERE user_id = %s 
+            ORDER BY event_date, event_time
+        """, (user_id,))
+        eventos = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        eventos_lista = [
+            {
+                'id': e[0],
+                'title': e[1],
+                'description': e[2],
+                'date': e[3].isoformat() if e[3] else None,
+                'time': e[4].isoformat() if e[4] else None,
+                'created': e[5].isoformat() if e[5] else None
+            }
+            for e in eventos
+        ]
+        
+        return render_template("calendario.html", 
+                              usuario=usuario, 
+                              email=session.get('user_email'),
+                              eventos=eventos_lista)
+    except Exception as e:
+        print(f"Error cargando calendario: {e}")
+        return render_template("calendario.html", 
+                              usuario=usuario, 
+                              email=session.get('user_email'),
+                              eventos=[])
 
+@app.route("/evento/crear", methods=["POST"])
+def crear_evento():
+    """Crear nuevo evento"""
+    if 'id_usuarios' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    
+    try:
+        data = request.get_json()
+        titulo = data.get('title', '').strip()
+        descripcion = data.get('description', '').strip()
+        fecha = data.get('date')
+        hora = data.get('time')
+        
+        if not titulo or not fecha:
+            return jsonify({'error': 'Título y fecha son requeridos'}), 400
+        
+        conn = conectarCampus()
+        cur = conn.cursor()
+        cur.execute("""
+            INSERT INTO events (user_id, title, description, event_date, event_time)
+            VALUES (%s, %s, %s, %s, %s)
+            RETURNING id
+        """, (session.get('id_user'), titulo, descripcion, fecha, hora if hora else None))
+        
+        evento_id = cur.fetchone()[0]
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({'success': True, 'id': evento_id, 'message': 'Evento creado'})
+    except Exception as e:
+        print(f"Error creando evento: {e}")
+        return jsonify({'error': str(e)}), 500
+
+@app.route("/evento/<int:evento_id>", methods=["GET", "PUT", "DELETE"])
+def gestionar_evento(evento_id):
+    """Obtener, actualizar o eliminar un evento"""
+    if 'id_usuarios' not in session:
+        return jsonify({'error': 'No autorizado'}), 401
+    
+    user_id = session.get('id_user')
+    
+    try:
+        conn = conectarCampus()
+        cur = conn.cursor()
+        
+        if request.method == "GET":
+            cur.execute("""
+                SELECT id, title, description, event_date, event_time 
+                FROM events WHERE id = %s AND user_id = %s
+            """, (evento_id, user_id))
+            evento = cur.fetchone()
+            cur.close()
+            conn.close()
+            
+            if not evento:
+                return jsonify({'error': 'Evento no encontrado'}), 404
+            
+            return jsonify({
+                'id': evento[0],
+                'title': evento[1],
+                'description': evento[2],
+                'date': evento[3].isoformat() if evento[3] else None,
+                'time': evento[4].isoformat() if evento[4] else None
+            })
+        
+        elif request.method == "PUT":
+            data = request.get_json()
+            titulo = data.get('title', '').strip()
+            descripcion = data.get('description', '').strip()
+            fecha = data.get('date')
+            hora = data.get('time')
+            
+            if not titulo or not fecha:
+                return jsonify({'error': 'Título y fecha son requeridos'}), 400
+            
+            cur.execute("""
+                UPDATE events 
+                SET title = %s, description = %s, event_date = %s, event_time = %s, updated_at = NOW()
+                WHERE id = %s AND user_id = %s
+            """, (titulo, descripcion, fecha, hora if hora else None, evento_id, user_id))
+            
+            conn.commit()
+            affected = cur.rowcount
+            cur.close()
+            conn.close()
+            
+            if affected == 0:
+                return jsonify({'error': 'Evento no encontrado o no autorizado'}), 404
+            
+            return jsonify({'success': True, 'message': 'Evento actualizado'})
+        
+        elif request.method == "DELETE":
+            cur.execute("""
+                DELETE FROM events WHERE id = %s AND user_id = %s
+            """, (evento_id, user_id))
+            
+            conn.commit()
+            affected = cur.rowcount
+            cur.close()
+            conn.close()
+            
+            if affected == 0:
+                return jsonify({'error': 'Evento no encontrado o no autorizado'}), 404
+            
+            return jsonify({'success': True, 'message': 'Evento eliminado'})
+    
+    except Exception as e:
+        print(f"Error gestionando evento: {e}")
+        return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
     app.run(debug=True)
