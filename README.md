@@ -64,7 +64,10 @@ Para ejecutar este proyecto localmente, necesitas tener instalado:
 ## 📸 Vistas del Proyecto
 
 * **Login:** Interfaz de acceso para usuarios y administradores.
-* **Perfil Admin:** Panel de control con acceso a gestión de usuarios y calendario.
+* **Perfil Admin:** Panel de control con acceso a gestión de usuarios y calendario-
+  Si ingresas como administrador, su nombre es Josefina
+  Su contraseña es : 123456
+* Su correo es josefina@tre.com
 * **Gestión de Usuarios:** Tabla interactiva para administrar la base de datos de alumnos.
 
 ---
@@ -72,3 +75,10 @@ Para ejecutar este proyecto localmente, necesitas tener instalado:
 ### ✨ Notas del desarrollador
 
 Este proyecto fue diseñado para ser escalable. Actualmente incluye módulos de gestión de horarios y asignaturas en fase de desarrollo.
+
+
+##### **Railway:**
+
+**Bash**
+
+[campus-producción-0c25.up.railway.app](https://campus-production-0c25.up.railway.app/)
